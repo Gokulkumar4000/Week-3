@@ -55,8 +55,10 @@ export const useAuth = () => {
     setLoading(true);
 
     try {
+      console.log('Starting registration for:', email, userData);
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const firebaseUser = userCredential.user;
+      console.log('Firebase user created:', firebaseUser.uid);
 
       // Create user document in Firestore
       const newUser = await createUserDocument({
@@ -65,16 +67,18 @@ export const useAuth = () => {
         ...userData,
       });
 
+      console.log('User registration completed successfully');
       setUser(newUser);
       return newUser;
     } catch (error: any) {
+      console.error('Registration error:', error);
       const errorMessage = error.code === 'auth/email-already-in-use' 
         ? 'Email already in use' 
         : error.code === 'auth/weak-password'
         ? 'Password should be at least 6 characters'
         : error.code === 'auth/invalid-email'
         ? 'Invalid email address'
-        : 'Registration failed. Please try again.';
+        : error.message || 'Registration failed. Please try again.';
       
       setError(errorMessage);
       throw new Error(errorMessage);

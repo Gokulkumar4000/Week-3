@@ -1,9 +1,33 @@
+import { useState } from 'react';
 import { Link } from 'wouter';
-import { UserPlus, Stethoscope, Calendar, Check, Bell } from 'lucide-react';
+import { UserPlus, Stethoscope, Calendar, Check, Bell, Database } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { initializeSampleData } from '../lib/sampleData';
+import { Notification } from '../components/Notification';
+import type { NotificationData } from '../types';
 
 export default function Landing() {
+  const [initializing, setInitializing] = useState(false);
+  const [notification, setNotification] = useState<NotificationData>({ show: false, message: '', type: 'success' });
+
+  const showNotification = (message: string, type: NotificationData['type']) => {
+    setNotification({ show: true, message, type });
+  };
+
+  const handleInitializeSampleData = async () => {
+    setInitializing(true);
+    try {
+      const result = await initializeSampleData();
+      showNotification(`Created ${result.doctors} doctors and ${result.patients} patients with sample appointments!`, 'success');
+    } catch (error: any) {
+      console.error('Error initializing sample data:', error);
+      showNotification(error.message || 'Failed to initialize sample data. Make sure Firestore is enabled in Firebase console.', 'error');
+    } finally {
+      setInitializing(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navigation Header */}
@@ -75,6 +99,28 @@ export default function Landing() {
               </CardContent>
             </Card>
           </div>
+          
+          {/* Sample Data Button */}
+          <div className="text-center mt-8">
+            <Button 
+              onClick={handleInitializeSampleData}
+              disabled={initializing}
+              className="bg-purple-600 text-white hover:bg-purple-700"
+            >
+              {initializing ? (
+                <>
+                  <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Creating Sample Data...
+                </>
+              ) : (
+                <>
+                  <Database className="w-4 h-4 mr-2" />
+                  Initialize Sample Data
+                </>
+              )}
+            </Button>
+            <p className="text-sm text-gray-500 mt-2">Click to add sample doctors, patients, and appointments</p>
+          </div>
         </div>
         
         {/* Features Section */}
@@ -104,6 +150,11 @@ export default function Landing() {
           </div>
         </div>
       </div>
+
+      <Notification
+        notification={notification}
+        onClose={() => setNotification({ ...notification, show: false })}
+      />
     </div>
   );
 }

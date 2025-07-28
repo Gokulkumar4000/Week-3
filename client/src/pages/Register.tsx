@@ -16,7 +16,13 @@ const patientSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().email('Invalid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
-  age: z.number().min(1, 'Age must be a positive number').max(120, 'Age must be realistic'),
+  age: z.union([z.string(), z.number()]).transform((val) => {
+    if (typeof val === 'string') {
+      const parsed = parseInt(val);
+      return isNaN(parsed) ? 0 : parsed;
+    }
+    return val;
+  }).refine((val) => val > 0 && val <= 120, 'Age must be between 1 and 120'),
   gender: z.enum(['male', 'female', 'other'], { required_error: 'Please select a gender' }),
 });
 
@@ -52,7 +58,7 @@ export default function Register() {
       name: '',
       email: '',
       password: '',
-      age: 0,
+      age: '' as any,
       gender: 'male',
     },
   });
@@ -200,7 +206,7 @@ export default function Register() {
                           <Input
                             type="number"
                             {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value))}
+                            onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : '')}
                           />
                         </FormControl>
                         <FormMessage />

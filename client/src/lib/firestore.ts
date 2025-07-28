@@ -6,6 +6,7 @@ import {
   deleteDoc,
   getDocs,
   getDoc,
+  setDoc,
   query,
   where,
   orderBy,
@@ -26,22 +27,21 @@ export const COLLECTIONS = {
 // User operations
 export const createUserDocument = async (userData: Omit<Patient | Doctor, 'uid'> & { uid: string }) => {
   try {
+    console.log('Creating user document for:', userData.uid, userData);
     const userRef = doc(db, COLLECTIONS.USERS, userData.uid);
-    await updateDoc(userRef, {
+    
+    // Use setDoc instead of updateDoc to create new documents
+    await setDoc(userRef, {
       ...userData,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    
+    console.log('User document created successfully');
     return userData;
   } catch (error) {
-    // If document doesn't exist, create it
-    const userRef = doc(db, COLLECTIONS.USERS, userData.uid);
-    await addDoc(collection(db, COLLECTIONS.USERS), {
-      ...userData,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    return userData;
+    console.error('Error creating user document:', error);
+    throw error;
   }
 };
 
