@@ -31,9 +31,14 @@ export const useAuth = () => {
             console.warn('User exists in Auth but not in Firestore');
             setUser(null);
           }
-        } catch (error) {
-          console.error('Error fetching user document:', error);
-          setError('Failed to load user data');
+        } catch (error: any) {
+          console.error('Error getting user document:', error);
+          // If permission denied or Firestore not setup, sign out the user
+          if (error.code === 'permission-denied' || error.code === 'unavailable') {
+            console.warn('Firestore access denied - signing out user');
+            await signOut(auth);
+          }
+          setError('Failed to load user data. Please check Firestore setup.');
           setUser(null);
         }
       } else {
@@ -72,12 +77,21 @@ export const useAuth = () => {
       return newUser;
     } catch (error: any) {
       console.error('Registration error:', error);
+      
+      // If user was created but Firestore failed, clean up auth
+      if (error.code === 'permission-denied' && auth.currentUser) {
+        console.log('Cleaning up auth user due to Firestore permission error');
+        await auth.currentUser.delete();
+      }
+      
       const errorMessage = error.code === 'auth/email-already-in-use' 
         ? 'Email already in use' 
         : error.code === 'auth/weak-password'
         ? 'Password should be at least 6 characters'
         : error.code === 'auth/invalid-email'
         ? 'Invalid email address'
+        : error.code === 'permission-denied'
+        ? 'Database access denied. Please enable Firestore and set security rules.'
         : error.message || 'Registration failed. Please try again.';
       
       setError(errorMessage);
@@ -104,13 +118,16 @@ export const useAuth = () => {
       setUser(userDoc);
       return userDoc;
     } catch (error: any) {
+      console.error('Login error:', error);
       const errorMessage = error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password'
         ? 'Invalid email or password'
         : error.code === 'auth/invalid-email'
         ? 'Invalid email address'
         : error.code === 'auth/too-many-requests'
         ? 'Too many failed attempts. Please try again later.'
-        : 'Login failed. Please try again.';
+        : error.code === 'permission-denied'
+        ? 'Database access denied. Please enable Firestore and set security rules.'
+        : error.message || 'Login failed. Please try again.';
       
       setError(errorMessage);
       throw new Error(errorMessage);

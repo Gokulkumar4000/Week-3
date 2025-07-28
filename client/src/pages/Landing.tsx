@@ -4,15 +4,35 @@ import { UserPlus, Stethoscope, Calendar, Check, Bell, Database } from 'lucide-r
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { initializeSampleData } from '../lib/sampleData';
+import { testFirestoreConnection, getFirestoreSetupInstructions } from '../lib/firestoreSetup';
 import { Notification } from '../components/Notification';
 import type { NotificationData } from '../types';
 
 export default function Landing() {
   const [initializing, setInitializing] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [notification, setNotification] = useState<NotificationData>({ show: false, message: '', type: 'success' });
 
   const showNotification = (message: string, type: NotificationData['type']) => {
     setNotification({ show: true, message, type });
+  };
+
+  const handleTestFirestore = async () => {
+    setTesting(true);
+    try {
+      const result = await testFirestoreConnection();
+      if (result.success) {
+        showNotification('Firestore connection successful! You can now register and use the app.', 'success');
+      } else {
+        const instructions = getFirestoreSetupInstructions();
+        showNotification(`${result.error}\n\nPlease follow setup instructions in console.`, 'error');
+        console.log('Firestore Setup Instructions:', instructions);
+      }
+    } catch (error: any) {
+      showNotification('Failed to test Firestore connection: ' + error.message, 'error');
+    } finally {
+      setTesting(false);
+    }
   };
 
   const handleInitializeSampleData = async () => {
@@ -100,26 +120,46 @@ export default function Landing() {
             </Card>
           </div>
           
-          {/* Sample Data Button */}
-          <div className="text-center mt-8">
-            <Button 
-              onClick={handleInitializeSampleData}
-              disabled={initializing}
-              className="bg-purple-600 text-white hover:bg-purple-700"
-            >
-              {initializing ? (
-                <>
-                  <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  Creating Sample Data...
-                </>
-              ) : (
-                <>
-                  <Database className="w-4 h-4 mr-2" />
-                  Initialize Sample Data
-                </>
-              )}
-            </Button>
-            <p className="text-sm text-gray-500 mt-2">Click to add sample doctors, patients, and appointments</p>
+          {/* Setup Buttons */}
+          <div className="text-center mt-8 space-y-4">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Button 
+                onClick={handleTestFirestore}
+                disabled={testing}
+                className="bg-green-600 text-white hover:bg-green-700"
+              >
+                {testing ? (
+                  <>
+                    <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Testing Firestore...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Test Firestore Setup
+                  </>
+                )}
+              </Button>
+              
+              <Button 
+                onClick={handleInitializeSampleData}
+                disabled={initializing || testing}
+                className="bg-purple-600 text-white hover:bg-purple-700"
+              >
+                {initializing ? (
+                  <>
+                    <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Creating Sample Data...
+                  </>
+                ) : (
+                  <>
+                    <Database className="w-4 h-4 mr-2" />
+                    Initialize Sample Data
+                  </>
+                )}
+              </Button>
+            </div>
+            <p className="text-sm text-gray-500">First test Firestore setup, then initialize sample data</p>
           </div>
         </div>
         
