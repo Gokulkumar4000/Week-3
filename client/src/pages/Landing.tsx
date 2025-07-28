@@ -38,11 +38,24 @@ export default function Landing() {
   const handleInitializeSampleData = async () => {
     setInitializing(true);
     try {
-      const result = await initializeSampleData();
-      showNotification(`Created ${result.doctors} doctors and ${result.patients} patients with sample appointments!`, 'success');
+      // Try Firebase sample data first, fallback to temporary storage
+      let result;
+      try {
+        result = await initializeSampleData();
+        showNotification(`Created ${result.doctors} doctors and ${result.patients} patients with sample appointments using Firebase!`, 'success');
+      } catch (error: any) {
+        if (error.code === 'permission-denied' || error.code === 'unavailable') {
+          console.log('Firebase unavailable, using temporary storage for sample data...');
+          const { tempInitializeSampleData } = await import('../lib/tempStorage');
+          result = await tempInitializeSampleData();
+          showNotification(`Created ${result.doctors} doctors and ${result.patients} patients with ${result.timeSlots} time slots using temporary storage!`, 'success');
+        } else {
+          throw error;
+        }
+      }
     } catch (error: any) {
       console.error('Error initializing sample data:', error);
-      showNotification(error.message || 'Failed to initialize sample data. Make sure Firestore is enabled in Firebase console.', 'error');
+      showNotification(error.message || 'Failed to initialize sample data', 'error');
     } finally {
       setInitializing(false);
     }

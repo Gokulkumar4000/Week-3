@@ -8,6 +8,12 @@ import {
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { getUserDocument, createUserDocument } from '../lib/firestore';
+import { 
+  tempCreateUser, 
+  tempGetUser, 
+  tempSetCurrentUser, 
+  tempGetCurrentUser 
+} from '../lib/tempStorage';
 import type { User, Patient, Doctor } from '../types';
 
 export const useAuth = () => {
@@ -22,27 +28,49 @@ export const useAuth = () => {
 
       if (firebaseUser) {
         try {
-          // Get user document from Firestore
-          const userDoc = await getUserDocument(firebaseUser.uid);
+          // Try Firestore first
+          let userDoc = await getUserDocument(firebaseUser.uid);
+          
+          if (!userDoc) {
+            // Fallback to temporary storage
+            userDoc = await tempGetUser(firebaseUser.uid);
+          }
+          
           if (userDoc) {
             setUser(userDoc);
+            tempSetCurrentUser(userDoc);
           } else {
-            // User exists in Auth but not in Firestore, this shouldn't happen in normal flow
-            console.warn('User exists in Auth but not in Firestore');
+            console.warn('User exists in Auth but not in storage');
             setUser(null);
           }
         } catch (error: any) {
           console.error('Error getting user document:', error);
-          // If permission denied or Firestore not setup, sign out the user
+          
+          // If Firestore fails, try temporary storage
           if (error.code === 'permission-denied' || error.code === 'unavailable') {
-            console.warn('Firestore access denied - signing out user');
-            await signOut(auth);
+            console.log('Firestore unavailable, checking temporary storage...');
+            try {
+              const userDoc = await tempGetUser(firebaseUser.uid);
+              if (userDoc) {
+                setUser(userDoc);
+                tempSetCurrentUser(userDoc);
+              } else {
+                console.warn('Firestore access denied - signing out user');
+                await signOut(auth);
+                setUser(null);
+              }
+            } catch (tempError) {
+              await signOut(auth);
+              setUser(null);
+            }
+          } else {
+            setError('Failed to load user data');
+            setUser(null);
           }
-          setError('Failed to load user data. Please check Firestore setup.');
-          setUser(null);
         }
       } else {
         setUser(null);
+        tempSetCurrentUser(null);
       }
       
       setLoading(false);
@@ -65,15 +93,34 @@ export const useAuth = () => {
       const firebaseUser = userCredential.user;
       console.log('Firebase user created:', firebaseUser.uid);
 
-      // Create user document in Firestore
-      const newUser = await createUserDocument({
-        uid: firebaseUser.uid,
-        email,
-        ...userData,
-      });
+      // Try to create user document in Firestore, fallback to temp storage
+      let newUser;
+      try {
+        newUser = await createUserDocument({
+          uid: firebaseUser.uid,
+          email,
+          ...userData,
+        });
+        console.log('User created in Firestore successfully');
+      } catch (firestoreError: any) {
+        console.log('Firestore creation failed, using temporary storage:', firestoreError.code);
+        
+        if (firestoreError.code === 'permission-denied' || firestoreError.code === 'unavailable') {
+          // Use temporary storage instead
+          newUser = await tempCreateUser({
+            uid: firebaseUser.uid,
+            email,
+            ...userData,
+          });
+          console.log('User created in temporary storage');
+        } else {
+          throw firestoreError;
+        }
+      }
 
       console.log('User registration completed successfully');
       setUser(newUser);
+      tempSetCurrentUser(newUser);
       return newUser;
     } catch (error: any) {
       console.error('Registration error:', error);
@@ -109,13 +156,25 @@ export const useAuth = () => {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const firebaseUser = userCredential.user;
 
-      // Get user document from Firestore
-      const userDoc = await getUserDocument(firebaseUser.uid);
+      // Try to get user document from Firestore, fallback to temp storage
+      let userDoc;
+      try {
+        userDoc = await getUserDocument(firebaseUser.uid);
+      } catch (error: any) {
+        if (error.code === 'permission-denied' || error.code === 'unavailable') {
+          console.log('Firestore unavailable for login, checking temporary storage...');
+          userDoc = await tempGetUser(firebaseUser.uid);
+        } else {
+          throw error;
+        }
+      }
+      
       if (!userDoc) {
         throw new Error('User data not found');
       }
 
       setUser(userDoc);
+      tempSetCurrentUser(userDoc);
       return userDoc;
     } catch (error: any) {
       console.error('Login error:', error);
@@ -141,6 +200,7 @@ export const useAuth = () => {
     try {
       await signOut(auth);
       setUser(null);
+      tempSetCurrentUser(null);
     } catch (error: any) {
       setError('Logout failed. Please try again.');
       throw error;
